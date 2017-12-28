@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="GBK"?>
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+	http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+	http://www.springframework.org/schema/tx
+	http://www.springframework.org/schema/tx/spring-tx-4.0.xsd
+	http://www.springframework.org/schema/context
+	http://www.springframework.org/schema/context/spring-context.xsd 
+	http://www.springframework.org/schema/aop
+	http://www.springframework.org/schema/aop/spring-aop-4.0.xsd">
+	<!-- 定义数据源Bean，使用C3P0数据源实现，并注入数据源的必要信息 -->
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close"
+		p:driverClass="com.mysql.jdbc.Driver"
+		p:jdbcUrl="jdbc:mysql://localhost/hibernate"
+		p:user="root"
+		p:password="123456"
+		p:maxPoolSize="40"
+		p:minPoolSize="2"
+		p:initialPoolSize="2"
+		p:maxIdleTime="30"/>
+	<!-- 定义Hibernate的SessionFactory，SessionFactory需要依赖数据源，注入dataSource -->
+	<bean id="sessionFactory" 
+		class="org.springframework.orm.hibernate4.LocalSessionFactoryBean"
+		p:dataSource-ref="dataSource">
+		<!-- mappingResources用来列出全部映射文件 -->
+		<property name="packagesToScan">
+			<list>
+				<!-- 以下用来列出所有的PO类-->
+				<value>com.booksys.domain</value>
+				<value>com.shiro.entity</value>
+			</list>
+		</property>
+		<!-- 定义Hibernate SessionFactory的属性 -->
+		<property name="hibernateProperties">
+			<props>
+				<!-- 指定Hibernate的连接方言 -->
+				<prop key="hibernate.dialect">
+					org.hibernate.dialect.MySQL5InnoDBDialect</prop>
+				<!--是否根据Hiberante映射创建数据表 -->
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<prop key="hibernate.show_sql">true</prop>
+				<prop key="hibernate.format_sql">true</prop>				
+			</props>
+		</property>
+	</bean>
+	<!-- 定义Service组件，并将DAO组件注入Service组件 -->	
+<!-- 	<bean id="bookService" class="org.com.booksys.service.impl.BookServiceImpl" -->
+<!-- 		p:bookDao-ref="bookDao"/> -->
+	<!-- 定义DAO组件，并将SessionFactory注入DAO组件 -->		
+<!-- 	<bean id="baseDao" class="org.com.common.dao.impl.BaseDaoHibernate4" -->
+<!-- 		p:sessionFactory-ref="sessionFactory"/> -->
+	
+	<!-- 配置Hibernate的局部事务管理器，使用HibernateTransactionManager类 -->
+	<!-- 该类是PlatformTransactionManager接口针对采用Hibernate的特定实现类 -->
+	<!-- 配置HibernateTransactionManager需依赖注入SessionFactory -->
+	<bean id="transactionManager" 
+		class="org.springframework.orm.hibernate4.HibernateTransactionManager"
+		p:sessionFactory-ref="sessionFactory"/>
+
+<!-- 配置事务增强处理Bean,指定事务管理器 -->
+<tx:advice id="txAdvice" 
+	transaction-manager="transactionManager">
+	<!-- 用于配置详细的事务定义 -->
+	<tx:attributes>
+		<!-- 所有以'get'开头的方法是read-only的 -->
+		<tx:method name="get*" read-only="true"/>
+		<!-- 其他方法使用默认的事务设置，指定超时时长为5秒 -->
+		<tx:method name="*" isolation="DEFAULT"
+			propagation="REQUIRED" timeout="5"/>
+	</tx:attributes>
+</tx:advice>
+<!-- AOP配置的元素 -->
+<aop:config proxy-target-class="true">
+	<!-- 配置一个切入点 -->
+	<aop:pointcut id="myPointcut" expression="bean(bookService)"/>
+	<!-- 指定在myPointcut切入点应用txAdvice事务增强处理 -->
+	<aop:advisor advice-ref="txAdvice" 
+		pointcut-ref="myPointcut"/>
+</aop:config>
+	<aop:aspectj-autoproxy proxy-target-class="true"/>
+	
+	<!--Quartz-->
+            
+    <!-- 集成方式：JobDetailFactoryBean，并且任务类需要继承QuartzJobBean-->
+    <!-- 定义jobDetail -->
+    <bean id="jobDetail" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+        <!-- durability 表示任务完成之后是否依然保留到数据库，默认false   -->
+        <property name="durability" value="true" />  
+        <!--     目标类  -->
+        <property name="jobClass" value="com.common.quartz.SpringQuartzTest"></property>
+        
+           <!--  在这个例子中，jobDataAsMap没有用，此目标类中接受的参数 ,若参数为service，则可以在此进行参数配置，类似struts2 -->
+           <!--
+        <property name="jobDataAsMap">  
+            <map>  
+                <entry key="service"><value>simple is the beat</value></entry>  
+            </map>  
+        </property>
+            -->
+    </bean>
+    
+    <!-- 定义simpleTrigger触发器 -->
+    <!--     
+    <bean id="simpleTrigger" class="org.springframework.scheduling.quartz.SimpleTriggerBean">
+        <property name="jobDetail" ref="jobDetail"></property>
+        <property name="repeatCount">
+            <value>8</value>
+        </property>
+        <property name="repeatInterval">
+            <value>1000</value>
+        </property>
+        <property name="startDelay">
+            <value>4</value>
+        </property>
+    </bean> 
+    -->
+    
+    <!-- 另一种触发器是CornTrigger -->
+     <bean id="cornTrigger" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+       <property name="jobDetail" ref="jobDetail"/>
+       <!-- 每个10秒触发 -->
+       <property name="cronExpression" value="0 0 9 ? * *"/>
+    </bean> 
+    
+    <!-- 定义核心调度器 -->
+    <bean id="scheduler" class="org.springframework.scheduling.quartz.SchedulerFactoryBean">
+      <property name="triggers">
+        <ref bean="cornTrigger"/>
+      </property>
+    </bean>
+    
+    <!-- begin -->
+        <!-- 这几行代码原本可以放在 springmvc 的配置文件中，但在加入 Shiro 权限框架后必须放在 Spring 的配置文件中，否则在 realm 中获取不到 service -->
+        <context:annotation-config />
+        <context:component-scan base-package="com.shiro.*">
+            <context:include-filter type="annotation" expression="org.springframework.stereotype.Service" />
+            <context:include-filter type="annotation" expression="org.springframework.stereotype.Controller" />
+            <context:include-filter type="annotation" expression="org.springframework.stereotype.Repository" />
+        </context:component-scan>
+        <!-- end -->
+</beans>

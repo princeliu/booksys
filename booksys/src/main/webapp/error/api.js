@@ -1,0 +1,1 @@
+Ext.ns('Ext.app');Ext.app.REMOTING_API = {"url":"/eds/router","type":"remoting","actions":{"friendService":[{"name":"read","len":1}],"gridContactService":[{"name":"update","len":1},{"name":"read","len":1},{"name":"destroy","len":1}]}};
